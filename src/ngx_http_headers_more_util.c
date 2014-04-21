@@ -261,6 +261,44 @@ ngx_http_headers_more_parse_types(ngx_log_t *log, ngx_str_t *cmd_name,
     return NGX_OK;
 }
 
+ngx_int_t
+ngx_http_headers_more_parse_inputheaders(ngx_log_t *log, ngx_str_t *cmd_name,
+    ngx_str_t *value, ngx_array_t *inputheaders)
+{
+    u_char          *p, *last;
+    ngx_str_t       *t = NULL;
+
+    p = value->data;
+    last = p + value->len;
+
+    for (; p != last; p++) {
+        if (t == NULL) {
+            if (isspace(*p)) {
+                continue;
+            }
+
+            t = ngx_array_push(inputheaders);
+            if (t == NULL) {
+                return NGX_ERROR;
+            }
+
+            t->len = 1;
+            t->data = p;
+
+            continue;
+        }
+
+        if (isspace(*p)) {
+            t = NULL;
+            continue;
+        }
+
+        t->len++;
+    }
+
+    return NGX_OK;
+}
+
 
 ngx_int_t
 ngx_http_headers_more_rm_header(ngx_list_t *l, ngx_table_elt_t *h)

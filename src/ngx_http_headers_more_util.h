@@ -45,6 +45,9 @@ ngx_int_t ngx_http_headers_more_parse_statuses(ngx_log_t *log,
 ngx_int_t ngx_http_headers_more_parse_types(ngx_log_t *log,
     ngx_str_t *cmd_name, ngx_str_t *value, ngx_array_t *types);
 
+ngx_int_t ngx_http_headers_more_parse_inputheaders(ngx_log_t *log,
+    ngx_str_t *cmd_name, ngx_str_t *value, ngx_array_t *inputheaders);
+
 ngx_int_t ngx_http_headers_more_rm_header_helper(ngx_list_t *l,
     ngx_list_part_t *cur, ngx_uint_t i);
 

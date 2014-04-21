@@ -21,6 +21,7 @@ typedef enum {
 
 typedef struct {
     ngx_array_t                       *types; /* of ngx_str_t */
+    ngx_array_t                       *inputheaders; /* of ngx_str_t */
     ngx_array_t                       *statuses; /* of ngx_uint_t */
     ngx_array_t                       *headers; /* of ngx_http_header_val_t */
     ngx_flag_t                         is_input;

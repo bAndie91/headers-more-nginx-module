@@ -20,6 +20,9 @@ ngx_http_headers_more_parse_directive(ngx_conf_t *cf, ngx_command_t *ngx_cmd,
         void *conf, ngx_http_headers_more_opcode_t opcode);
 static ngx_flag_t ngx_http_headers_more_check_type(ngx_http_request_t *r,
         ngx_array_t *types);
+static ngx_flag_t ngx_http_headers_more_check_inputheaders(ngx_http_request_t *r,
+        ngx_array_t *inputheaders);
+static ngx_table_elt_t * ngx_http_headers_more_search_inputheader(ngx_http_request_t *r, u_char *name, size_t len);
 static ngx_flag_t ngx_http_headers_more_check_status(ngx_http_request_t *r,
         ngx_array_t *statuses);
 static ngx_int_t ngx_http_set_header(ngx_http_request_t *r,
@@ -119,6 +122,10 @@ ngx_http_headers_more_exec_cmd(ngx_http_request_t *r,
     }
 
     if (cmd->types && !ngx_http_headers_more_check_type(r, cmd->types)) {
+        return NGX_OK;
+    }
+
+    if (cmd->inputheaders && !ngx_http_headers_more_check_inputheaders(r, cmd->inputheaders)) {
         return NGX_OK;
     }
 
@@ -538,6 +545,56 @@ ngx_http_headers_more_check_type(ngx_http_request_t *r, ngx_array_t *types)
     return 0;
 }
 
+static ngx_flag_t
+ngx_http_headers_more_check_inputheaders(ngx_http_request_t *r, ngx_array_t *headernames)
+{
+    ngx_uint_t          i;
+    ngx_str_t           *t;
+
+    t = headernames->elts;
+
+    for (i = 0; i < headernames->nelts; i++) {
+        if (ngx_http_headers_more_search_inputheader(r, t[i].data, t[i].len) != NULL)
+        {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static ngx_table_elt_t * ngx_http_headers_more_search_inputheader(ngx_http_request_t *r, u_char *name, size_t len) {
+    ngx_list_part_t            *part;
+    ngx_table_elt_t            *h;
+    ngx_uint_t                  i;
+    
+    // Get the first part of the list. There is usual only one part.
+    part = &r->headers_in.headers.part;
+    h = part->elts;
+    // Headers list array may consist of more than one part, so loop through all of it
+    for (i = 0; ; i++) {
+        if (i >= part->nelts) {
+            if (part->next == NULL) {
+                // The last part, search is done.
+                break;
+            }
+            part = part->next;
+            h = part->elts;
+            i = 0;
+        }
+        // Just compare the lengths and then the names case insensitively.
+        if (len != h[i].key.len || ngx_strcasecmp(name, h[i].key.data) != 0) {
+            // This header doesn't match.
+            continue;
+        }
+ 
+        // Ta-da, we got one! Note, we'v stop the search at the first matched header while more then one header may fit.
+        return &h[i];
+    }
+ 
+    // No headers was found
+    return NULL;
+}
 
 static ngx_flag_t
 ngx_http_headers_more_check_status(ngx_http_request_t *r, ngx_array_t *statuses)
@@ -601,6 +658,11 @@ ngx_http_headers_more_parse_directive(ngx_conf_t *cf, ngx_command_t *ngx_cmd,
         return NGX_CONF_ERROR;
     }
 
+    cmd->inputheaders = ngx_array_create(cf->pool, 1, sizeof(ngx_str_t));
+    if (cmd->inputheaders == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
     cmd->statuses = ngx_array_create(cf->pool, 1, sizeof(ngx_uint_t));
     if (cmd->statuses == NULL) {
         return NGX_CONF_ERROR;
@@ -657,8 +719,31 @@ ngx_http_headers_more_parse_directive(ngx_conf_t *cf, ngx_command_t *ngx_cmd,
                 ignore_next_arg = 1;
 
                 continue;
+	    
+	    }
+            else if (arg[i].data[1] == 'i') {
+                if (i == cf->args->nelts - 1) {
+                    ngx_log_error(NGX_LOG_ERR, cf->log, 0,
+                                  "%V: option -i takes an argument.",
+                                  cmd_name);
 
-            } else if (arg[i].data[1] == 's') {
+                    return NGX_CONF_ERROR;
+                }
+
+                rc = ngx_http_headers_more_parse_inputheaders(cf->log, cmd_name,
+                                                       &arg[i + 1],
+                                                       cmd->inputheaders);
+
+                if (rc != NGX_OK) {
+                    return NGX_CONF_ERROR;
+                }
+
+                ignore_next_arg = 1;
+
+                continue;
+
+            }
+            else if (arg[i].data[1] == 's') {
 
                 if (i == cf->args->nelts - 1) {
                     ngx_log_error(NGX_LOG_ERR, cf->log, 0,
